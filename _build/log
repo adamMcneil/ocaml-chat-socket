@@ -13,11 +13,10 @@
 #  ; build_dir = In_build_dir "default"
 #  ; instrument_with = []
 #  }
-$ /home/adam/.opam/default/bin/ocamlc.opt -config > /tmp/dune_7e0c9e_output
+$ /home/adam/.opam/default/bin/ocamlc.opt -config > /tmp/dune_f7f182_output
 $ (cd _build/default && /home/adam/.opam/default/bin/ocamlopt.opt -w @1..3@5..28@31..39@43@46..47@49..57@61..62@67@69-40 -strict-sequence -strict-formats -short-paths -keep-locs -g -I bin/.main.eobjs/byte -I bin/.main.eobjs/native -I /home/adam/.opam/default/lib/ocaml/unix -I lib/.ocaml_chat_socket.objs/byte -I lib/.ocaml_chat_socket.objs/native -intf-suffix .ml -no-alias-deps -opaque -o bin/.main.eobjs/native/dune__exe__Main.cmx -c -impl bin/main.ml)
-> File "bin/main.ml", line 13, characters 14-20:
-> 13 |       let _ = fflush client_socket in
->                    ^^^^^^
-> Error: Unbound value fflush
-> Hint: Did you mean flush?
+> File "bin/main.ml", line 37, characters 4-27:
+> 37 |     recv_messages client_fd
+>          ^^^^^^^^^^^^^^^^^^^^^^^
+> Error (warning 21 [nonreturning-statement]): this statement never returns (or has an unsound type.)
 [2]
