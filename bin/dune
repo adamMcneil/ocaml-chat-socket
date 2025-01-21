@@ -1,4 +1,4 @@
 (executable
  (public_name ocaml_chat_socket)
  (name main)
- (libraries ocaml_chat_socket unix))
+ (libraries ocaml_chat_socket unix threads))

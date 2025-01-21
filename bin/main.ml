@@ -1,4 +1,5 @@
 open Unix
+open Thread
 
 let send_messages socket_fd =
   while true do
@@ -30,17 +31,19 @@ let start_server port =
   Printf.printf "Server listening on port %d\n%!" port;
   while true do
     let client_fd, client_addr = accept socket_fd in
+    ignore (create send_messages client_fd);
     Printf.printf "Client connected: %s\n%!"
       (match client_addr with
       | ADDR_INET (addr, _) -> string_of_inet_addr addr
       | _ -> "Unknown");
-    recv_messages client_fd
+    ignore (recv_messages client_fd)
   done
 
 let connect_to_server host port =
   let sockaddr = ADDR_INET (inet_addr_of_string host, port) in
   let socket_fd = socket PF_INET SOCK_STREAM 0 in
   connect socket_fd sockaddr;
+  ignore (create recv_messages socket_fd);
   Printf.printf "Connected to server %s:%d\n%!" host port;
   send_messages socket_fd
 
