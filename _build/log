@@ -1,0 +1,23 @@
+# dune exec ocaml_chat_socket
+# OCAMLPARAM: unset
+# Shared cache: disabled
+# Shared cache location: /home/adam/snap/alacritty/common/.cache/dune/db
+# Workspace root: /home/adam/git-repos/ocaml_chat_socket
+# Auto-detected concurrency: 12
+# Dune context:
+#  { name = "default"
+#  ; kind = "default"
+#  ; profile = Dev
+#  ; merlin = true
+#  ; fdo_target_exe = None
+#  ; build_dir = In_build_dir "default"
+#  ; instrument_with = []
+#  }
+$ /home/adam/.opam/default/bin/ocamlc.opt -config > /tmp/dune_7e0c9e_output
+$ (cd _build/default && /home/adam/.opam/default/bin/ocamlopt.opt -w @1..3@5..28@31..39@43@46..47@49..57@61..62@67@69-40 -strict-sequence -strict-formats -short-paths -keep-locs -g -I bin/.main.eobjs/byte -I bin/.main.eobjs/native -I /home/adam/.opam/default/lib/ocaml/unix -I lib/.ocaml_chat_socket.objs/byte -I lib/.ocaml_chat_socket.objs/native -intf-suffix .ml -no-alias-deps -opaque -o bin/.main.eobjs/native/dune__exe__Main.cmx -c -impl bin/main.ml)
+> File "bin/main.ml", line 13, characters 14-20:
+> 13 |       let _ = fflush client_socket in
+>                    ^^^^^^
+> Error: Unbound value fflush
+> Hint: Did you mean flush?
+[2]
