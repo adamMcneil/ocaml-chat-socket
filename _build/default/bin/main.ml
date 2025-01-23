@@ -1,8 +1,8 @@
 open Unix
 open Thread
 
-let host = "127.0.0.1"
-let port = 8080
+let default_host = "127.0.0.1"
+let default_port = 8080
 let ack_message = "###ack###"
 let max_message_size = 1024
 let messages_mutex = Mutex.create ()
@@ -86,6 +86,20 @@ let () =
   print_string "Do you want to be a server or client? (s/c)";
   let server_option = read_line () in
   match server_option with
-  | "s" -> start_server port
-  | "c" -> connect_to_server host port
+  | "s" -> (
+      Printf.printf "Enter port to start server on: ";
+      let port = read_line () in
+      match port with
+      | "" -> start_server default_port
+      | _ -> start_server (int_of_string port))
+  | "c" -> (
+      Printf.printf "Enter host to connect to: ";
+      let host = read_line () in
+      Printf.printf "Enter port to connect to: ";
+      let port = read_line () in
+      match (port, host) with
+      | "", "" -> connect_to_server default_host default_port
+      | _, "" -> connect_to_server host default_port
+      | "", _ -> connect_to_server default_host (int_of_string port)
+      | _, _ -> connect_to_server host (int_of_string port))
   | _ -> Printf.printf "not a valid option"
