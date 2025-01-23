@@ -4,7 +4,7 @@ open Thread
 let host = "127.0.0.1"
 let port = 8080
 let ack_message = "###ack###"
-let max_message_size = 102
+let max_message_size = 1024
 let messages_mutex = Mutex.create ()
 
 let send_messages socket =
@@ -24,7 +24,8 @@ let send_messages socket =
       send_message_loop next_message)
   in
   let message = read_line () in
-  send_message_loop message
+  send_message_loop message;
+  close socket
 
 let ready_to_read socket =
   let read_fds, _, _ = Unix.select [ socket ] [] [] 0.0 in
@@ -48,14 +49,16 @@ let recv_messages socket =
     else Mutex.unlock messages_mutex;
     recv_message_loop ()
   in
-  recv_message_loop ()
+  try recv_message_loop () with
+  | Unix.Unix_error (Unix.EBADF, "select", _) -> Mutex.unlock messages_mutex
+  | e -> raise e
 
 let start_server port =
   let socket_address = ADDR_INET (inet_addr_any, port) in
   let socket = socket PF_INET SOCK_STREAM 0 in
   bind socket socket_address;
   listen socket 1;
-  let rec loop () =
+  let rec accept_clients_loop () =
     Printf.printf "Server listening on port %d\n%!" port;
     let connected_socket, client_addr = accept socket in
     let _ = create send_messages connected_socket in
@@ -67,9 +70,9 @@ let start_server port =
     Printf.printf "Client connected: %s\n%!" client;
     let _ = recv_messages connected_socket in
     Printf.printf "Client disconnected: %s\n%!" client;
-    loop ()
+    accept_clients_loop ()
   in
-  loop ()
+  accept_clients_loop ()
 
 let connect_to_server host port =
   let socket_address = ADDR_INET (inet_addr_of_string host, port) in
