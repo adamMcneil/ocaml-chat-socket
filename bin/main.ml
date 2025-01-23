@@ -12,15 +12,25 @@ let send_messages socket =
   let rec loop message =
     if message <> "quit" then (
       let start_time = Unix.gettimeofday () in
+
       ignore
         (Unix.write socket (Bytes.of_string message) 0 (String.length message));
       let buffer = Bytes.create max_message_size in
+
+      let rec _peek_loop () =
+        let _ = recv socket buffer 0 (Bytes.length buffer) [ MSG_PEEK ] in
+        match Bytes.to_string buffer with
+        | "###ack###" -> ()
+        | _ -> _peek_loop ()
+      in
       let _ = Unix.read socket buffer 0 max_message_size in
+
       let end_time = Unix.gettimeofday () in
       let elapsed_time = end_time -. start_time in
       Printf.printf "Server response: %.6f seconds\n%!" elapsed_time;
       let buffer_string = Bytes.to_string buffer in
       print_endline buffer_string;
+
       let next_message = read_line () in
       loop next_message)
   in
@@ -32,12 +42,14 @@ let send_messages socket =
 let recv_messages socket =
   let buffer = Bytes.create max_message_size in
   let rec loop () =
+    let rec _peek_loop () =
+      let _ = recv socket buffer 0 (Bytes.length buffer) [ MSG_PEEK ] in
+      match Bytes.to_string buffer with "###ack###" -> _peek_loop () | _ -> ()
+    in
     let bytes_read = read socket buffer 0 max_message_size in
     let message = Bytes.sub_string buffer 0 bytes_read in
+
     match message with
-    (* | "###ack###" -> *)
-    (*     Printf.printf "recieved ack at the wrong time\n%!"; *)
-    (*     loop () *)
     | "" ->
         Printf.printf "closing recv ending%!";
         close socket
