@@ -5,12 +5,12 @@ let host = "127.0.0.1"
 let port = 8080
 let ack_message = "###ack###"
 let max_message_size = 1024
-(* let messages = [] *)
-(* let messages_mutex = Mutex.create () *)
+let messages_mutex = Mutex.create ()
 
 let send_messages socket =
   let rec loop message =
     if message <> "quit" then (
+      Mutex.lock messages_mutex;
       let start_time = Unix.gettimeofday () in
       ignore
         (Unix.write socket (Bytes.of_string message) 0 (String.length message));
@@ -19,37 +19,44 @@ let send_messages socket =
       let end_time = Unix.gettimeofday () in
       let elapsed_time = end_time -. start_time in
       Printf.printf "Server response: %.6f seconds\n%!" elapsed_time;
-      let buffer_string = Bytes.to_string buffer in
-      print_endline buffer_string;
+      (* let buffer_string = Bytes.to_string buffer in *)
+      (* print_endline buffer_string; *)
+      Mutex.unlock messages_mutex;
       let next_message = read_line () in
       loop next_message)
   in
   let message = read_line () in
   loop message;
-  Printf.printf "closing socket%!";
+  Printf.printf "closing socket\n%!";
   close socket
+
+let is_ready_to_read sock =
+  let read_fds, _, _ = Unix.select [ sock ] [] [] 0.0 in
+  read_fds <> []
 
 let recv_messages socket =
   let buffer = Bytes.create max_message_size in
   let rec loop () =
-    let bytes_read = read socket buffer 0 max_message_size in
-    let message = Bytes.sub_string buffer 0 bytes_read in
-    match message with
-    (* | "###ack###" -> *)
-    (*     Printf.printf "recieved ack at the wrong time\n%!"; *)
-    (*     loop () *)
-    | "" ->
-        Printf.printf "closing recv ending%!";
-        close socket
-    | _ ->
-        Printf.printf "Received: \"%s\"\n%!" message;
-        let _ =
-          write socket
-            (Bytes.of_string ack_message)
-            0
-            (String.length ack_message)
-        in
-        loop ()
+    Mutex.lock messages_mutex;
+    if is_ready_to_read socket then (
+      let bytes_read = read socket buffer 0 max_message_size in
+      Mutex.unlock messages_mutex;
+      let message = Bytes.sub_string buffer 0 bytes_read in
+      match message with
+      | "" ->
+          Printf.printf "closing recv ending\n%!";
+          close socket
+      | _ ->
+          Printf.printf "Received: \"%s\"\n%!" message;
+          let _ =
+            write socket
+              (Bytes.of_string ack_message)
+              0
+              (String.length ack_message)
+          in
+          loop ())
+    else Mutex.unlock messages_mutex;
+    loop ()
   in
   loop ()
 
