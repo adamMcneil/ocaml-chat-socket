@@ -8,8 +8,8 @@ let max_message_size = 1024
 let mutex = Mutex.create ()
 let quit_flag = ref false
 
-let send_file filename socket =
-  let file = open_in_bin filename in
+let send_file file_name socket =
+  let file = open_in_bin file_name in
   let buffer_size = max_message_size in
   let buffer = Bytes.create buffer_size in
   try
@@ -71,25 +71,17 @@ let is_socket_closed socket_fd =
     else
       let buffer = Bytes.create 1 in
       let bytes_peeked = Unix.recv socket_fd buffer 0 1 [ Unix.MSG_PEEK ] in
-      if bytes_peeked = 0 (* If 0 bytes, the connection is closed *) then Closed
-      else Full
-  with
-  | Unix.Unix_error (Unix.EBADF, _, _) -> Empty
-  | Unix.Unix_error (Unix.EAGAIN, _, _) ->
-      Empty (* No data yet, but connection open *)
-  | _ ->
-      Printf.printf "unknown error";
-      Closed (* Treat unexpected errors as connection closed *)
+      if bytes_peeked = 0 then Closed else Full
+  with _ -> Closed (* Treat unexpected errors as connection closed *)
 
 let receive_file filename socket number_of_messages =
   let file = open_out_bin filename in
-  let buffer_size = max_message_size in
-  let buffer = Bytes.create buffer_size in
+  let buffer = Bytes.create max_message_size in
   let rec loop count =
     match count with
     | 0 -> ()
     | _ ->
-        let bytes_read = read socket buffer 0 buffer_size in
+        let bytes_read = read socket buffer 0 max_message_size in
         output file buffer 0 bytes_read;
         loop (count - 1)
   in
@@ -101,7 +93,6 @@ let make_file_generator () =
   fun () ->
     let filename = Printf.sprintf "file%d" !counter in
     incr counter;
-    (* Increment the counter *)
     filename
 
 let recv_messages socket =
@@ -111,8 +102,8 @@ let recv_messages socket =
     Mutex.lock mutex;
     match is_socket_closed socket with
     | Closed ->
-        quit_flag := true;
-        Mutex.unlock mutex
+        Mutex.unlock mutex;
+        quit_flag := true
     | Empty ->
         Mutex.unlock mutex;
         recv_message_loop ()
@@ -129,7 +120,7 @@ let recv_messages socket =
               Printf.printf "Received a file\n%!"
           | _ -> Printf.printf "Received: \"%s\"\n%!" message
         in
-        ignore
+        ignore (* responsed with an ack *)
           (write socket
              (Bytes.of_string ack_message)
              0
@@ -145,7 +136,7 @@ let start_server port =
   bind socket socket_address;
   listen socket 1;
   let rec accept_clients_loop () =
-    Printf.printf "Server listening on port %d\n%!" port;
+    Printf.printf "Waiting connection on port %d\n%!" port;
     let connected_socket, client_addr = accept socket in
     let _ = create send_messages connected_socket in
     let client =
@@ -161,7 +152,7 @@ let start_server port =
   in
   accept_clients_loop ()
 
-let connect_to_server host port =
+let start_client host port =
   let socket_address = ADDR_INET (inet_addr_of_string host, port) in
   let socket = socket PF_INET SOCK_STREAM 0 in
   connect socket socket_address;
@@ -178,6 +169,6 @@ let () =
       Printf.printf "Enter host to connect to: ";
       let host = read_line () in
       match host with
-      | "" -> connect_to_server default_host port
-      | _ -> connect_to_server host port)
+      | "" -> start_client default_host port
+      | _ -> start_client host port)
   | _ -> Printf.printf "not a valid option"
