@@ -96,8 +96,17 @@ let receive_file filename socket number_of_messages =
   loop number_of_messages;
   close_out file
 
+let make_file_generator () =
+  let counter = ref 0 in
+  fun () ->
+    let filename = Printf.sprintf "file%d" !counter in
+    incr counter;
+    (* Increment the counter *)
+    filename
+
 let recv_messages socket =
   let buffer = Bytes.create max_message_size in
+  let next_file = make_file_generator () in
   let rec recv_message_loop () =
     Mutex.lock mutex;
     match is_socket_closed socket with
@@ -116,7 +125,7 @@ let recv_messages socket =
               let number_of_messages =
                 int_of_string (String.sub message 1 (String.length message - 1))
               in
-              let _ = receive_file "something" socket number_of_messages in
+              let _ = receive_file (next_file ()) socket number_of_messages in
               Printf.printf "Received a file\n%!"
           | _ -> Printf.printf "Received: \"%s\"\n%!" message
         in
