@@ -6,7 +6,8 @@ let port = 8080
 let ack_message = "###ack###"
 let max_message_size = 1024
 let mutex = Mutex.create ()
-let quit_flag = ref false
+let socket_is_closed = ref false
+let quit = ref false
 
 let send_file file_name socket =
   let file = open_in_bin file_name in
@@ -22,44 +23,56 @@ let send_file file_name socket =
 
 let rec enter_message () =
   let message = read_line () in
-  match message with "" -> enter_message () | _ -> message
+  let some_message =
+    match message with
+    | "" -> enter_message ()
+    | "quit" ->
+        quit := true;
+        None
+    | _ -> Some message
+  in
+  if not !socket_is_closed then some_message else None
 
 let send_messages socket =
-  let rec send_message_loop message =
-    if message <> "quit" && not !quit_flag then (
-      Mutex.lock mutex;
-      let start_time = Unix.gettimeofday () in
-      let _ =
-        match message with
-        | _ when message.[0] = ':' ->
-            let file_name = String.sub message 1 (String.length message - 1) in
-            let stats = stat file_name in
-            let number_of_messages =
-              (stats.Unix.st_size + max_message_size - 1) / max_message_size
-            in
-            let control_message = ":" ^ string_of_int number_of_messages in
-            ignore
-              (write socket
-                 (Bytes.of_string control_message)
-                 0
-                 (String.length control_message));
-            send_file file_name socket
-        | _ ->
-            ignore
-              (write socket (Bytes.of_string message) 0 (String.length message))
-      in
-      let buffer = Bytes.create max_message_size in
-      let _ = read socket buffer 0 max_message_size in
-      let end_time = Unix.gettimeofday () in
-      let elapsed_time = end_time -. start_time in
-      Printf.printf "%.6f second latency\n%!" elapsed_time;
-      Mutex.unlock mutex;
-      let next_message = enter_message () in
-      send_message_loop next_message)
+  let _ = socket_is_closed := false in
+  let rec send_message_loop () =
+    let some_message = enter_message () in
+    match some_message with
+    | Some message ->
+        Mutex.lock mutex;
+        let start_time = Unix.gettimeofday () in
+        let _ =
+          match message with
+          | _ when message.[0] = ':' ->
+              let file_name =
+                String.sub message 1 (String.length message - 1)
+              in
+              let stats = stat file_name in
+              let number_of_messages =
+                (stats.Unix.st_size + max_message_size - 1) / max_message_size
+              in
+              let control_message = ":" ^ string_of_int number_of_messages in
+              ignore
+                (write socket
+                   (Bytes.of_string control_message)
+                   0
+                   (String.length control_message));
+              send_file file_name socket
+          | _ ->
+              ignore
+                (write socket (Bytes.of_string message) 0
+                   (String.length message))
+        in
+        let buffer = Bytes.create max_message_size in
+        let _ = read socket buffer 0 max_message_size in
+        let end_time = Unix.gettimeofday () in
+        let elapsed_time = end_time -. start_time in
+        Printf.printf "%.6f second latency\n%!" elapsed_time;
+        Mutex.unlock mutex;
+        send_message_loop ()
+    | _ -> Printf.printf "ending sending \n%!"
   in
-  let message = enter_message () in
-  let _ = send_message_loop message in
-  quit_flag := false;
+  let _ = send_message_loop () in
   close socket
 
 type socket_status = Closed | Empty | Full
@@ -96,18 +109,16 @@ let make_file_generator () =
     filename
 
 let recv_messages socket =
+  let _ = quit := false in
   let buffer = Bytes.create max_message_size in
   let next_file = make_file_generator () in
   let rec recv_message_loop () =
     Mutex.lock mutex;
-    match is_socket_closed socket with
-    | Closed ->
-        Mutex.unlock mutex;
-        quit_flag := true
-    | Empty ->
+    match (is_socket_closed socket, !quit) with
+    | Empty, false ->
         Mutex.unlock mutex;
         recv_message_loop ()
-    | Full ->
+    | Full, false ->
         let bytes_read = read socket buffer 0 max_message_size in
         let message = Bytes.sub_string buffer 0 bytes_read in
         let _ =
@@ -127,8 +138,13 @@ let recv_messages socket =
              (String.length ack_message));
         Mutex.unlock mutex;
         recv_message_loop ()
+    | Closed, _ ->
+        Mutex.unlock mutex;
+        socket_is_closed := true
+    | _, _ -> Mutex.unlock mutex
   in
-  recv_message_loop ()
+  recv_message_loop ();
+  Printf.printf "done revc\n%!"
 
 let start_server port =
   let socket_address = ADDR_INET (inet_addr_any, port) in
